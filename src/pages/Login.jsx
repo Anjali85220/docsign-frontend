@@ -7,7 +7,8 @@ function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
   const navigate = useNavigate();
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e) =>
+    setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -25,11 +26,30 @@ function Login() {
       className="h-screen bg-cover bg-center flex items-center justify-center"
       style={{ backgroundImage: `url(${bg})` }}
     >
-      <form onSubmit={handleSubmit} className="bg-white/20 backdrop-blur-md border border-white/30 p-8 rounded-xl shadow-xl w-96 space-y-4 text-white">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white/20 backdrop-blur-md border border-white/30 p-8 rounded-xl shadow-xl w-96 space-y-4 text-black"
+      >
         <h2 className="text-2xl font-semibold text-center">Login</h2>
-        <input name="email" placeholder="Email" onChange={handleChange} className="w-full p-2 rounded bg-white/10 border border-white/30" />
-        <input type="password" name="password" placeholder="Password" onChange={handleChange} className="w-full p-2 rounded bg-white/10 border border-white/30" />
-        <button type="submit" className="w-full bg-green-600 py-2 rounded hover:bg-green-700">Login</button>
+        <input
+          name="email"
+          placeholder="Email"
+          onChange={handleChange}
+          className="w-full p-2 rounded bg-white/80 border border-gray-300 text-black placeholder-black"
+        />
+        <input
+          type="password"
+          name="password"
+          placeholder="Password"
+          onChange={handleChange}
+          className="w-full p-2 rounded bg-white/80 border border-gray-300 text-black placeholder-black"
+        />
+        <button
+          type="submit"
+          className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700"
+        >
+          Login
+        </button>
       </form>
     </div>
   );

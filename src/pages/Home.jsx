@@ -10,7 +10,10 @@ function Home() {
       style={{ backgroundImage: `url(${bg})` }}
     >
       <h1 className="text-5xl font-extrabold mb-4 drop-shadow-lg">DocSign</h1>
-      <p className="text-lg mb-6">Secure, sign, and share your documents digitally with ease.</p>
+     <p className="text-3xl mb-10">
+  Secure, sign, and share your documents digitally with ease.</p>
+
+
       <div className="space-x-4">
         <button
           onClick={() => navigate("/register")}

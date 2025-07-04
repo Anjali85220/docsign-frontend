@@ -54,34 +54,31 @@ function SignPage() {
         
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
 
-        const data = await res.json();
-        if (data.doc?.filePath) {
-          const relativePath = data.doc.filePath.replace(/\\/g, "/").replace(/^uploads\//, "");
-          const url = `https://docsign-backend.onrender.com/uploads/${relativePath}`;
+        // After fetching the document
+const data = await res.json();
+if (data.doc?.filePath) {
+  let cleanedPath = data.doc.filePath.replace(/\\/g, "/");
 
-          setFileUrl(url);
-          
-          if (isEditMode && data.doc.signatures) {
-            const loadedPlaceholders = data.doc.signatures.map(sig => {
-              // Convert stored PDF coordinates to viewport coordinates
-              const scaleX = viewport.width / sig.pageWidth;
-              const scaleY = viewport.height / sig.pageHeight;
-              const x = sig.x * scaleX;
-              const y = viewport.height - (sig.y * scaleY); // Proper Y-axis conversion
-              
-              return {
-                ...sig,
-                id: Date.now() + Math.random(),
-                x,
-                y,
-                fixed: false,
-                signed: true,
-                showBox: false,
-                signatureType: sig.signatureType || "text"
-              };
-            });
-            
-            setPlaceholders(loadedPlaceholders);
+  // If it does NOT already start with "uploads/", prepend it
+  if (!cleanedPath.startsWith("uploads/")) {
+    cleanedPath = "uploads/" + cleanedPath;
+  }
+
+  const fileUrl = `https://docsign-backend.onrender.com/${cleanedPath}`;
+  setFileUrl(fileUrl);
+
+  // Set placeholders if editing
+  if (isEditMode && data.doc.signatures) {
+    const loadedPlaceholders = data.doc.signatures.map(sig => {
+      return {
+        ...sig,
+        x: sig.x,
+        y: sig.y,
+        page: sig.page,
+        locked: true
+      };
+    });
+     setPlaceholders(loadedPlaceholders);
             setIsConfirmed(data.doc.signed);
             if (data.doc.signedFilePath) {
               setSignedPdfUrl(`https://docsign-backend.onrender.com/api/${data.doc.signedFilePath.replace(/\\/g, "/")}`);

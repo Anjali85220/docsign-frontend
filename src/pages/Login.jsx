@@ -17,9 +17,7 @@ function Login() {
 
     try {
       const res = await axios.post(
-        `${import.meta.env.VITE_API_BASE_URL}/auth/login`,
-        form
-      );
+        `${import.meta.env.VITE_API_BASE_URL}/auth/login`, form);
 
       // Check for token in response
       if (res.data && res.data.token) {

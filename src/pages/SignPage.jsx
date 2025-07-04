@@ -42,61 +42,96 @@ function SignPage() {
   const dragRef = useRef(null);
   const pageRef = useRef(null);
 
+  // Helper function to construct proper file URLs
+  const constructFileUrl = (filePath) => {
+    if (!filePath) return null;
+    
+    // Remove any leading slashes and backslashes
+    let cleanPath = filePath.replace(/^[\\\/]+/, '').replace(/\\/g, '/');
+    
+    // Ensure the path starts with 'uploads/' if it's not already there
+    if (!cleanPath.startsWith('uploads/')) {
+      cleanPath = `uploads/${cleanPath}`;
+    }
+    
+    // Remove any double slashes
+    cleanPath = cleanPath.replace(/\/+/g, '/');
+    
+    const baseUrl = 'https://docsign-backend.onrender.com';
+    const fullUrl = `${baseUrl}/${cleanPath}`;
+    
+    console.log('Constructed URL:', fullUrl);
+    return fullUrl;
+  };
+
   // Fetch document and existing signatures
   useEffect(() => {
     const fetchDocument = async () => {
       try {
         setIsLoading(true);
+        setError(""); // Clear previous errors
         const token = localStorage.getItem("token");
+        
+        if (!token) {
+          setError("Authentication token not found");
+          return;
+        }
+
         const res = await fetch(`https://docsign-backend.onrender.com/api/docs/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-
-        // After fetching the document
-const data = await res.json();
-if (data.doc?.filePath) {
-  let cleanedPath = data.doc.filePath.replace(/\\/g, "/");
-  if (!cleanedPath.startsWith("uploads/")) {
-    cleanedPath = `uploads/${cleanedPath}`;
-  }
-  console.log("✅ Cleaned path:", cleanedPath);
-  const fileUrl = `https://docsign-backend.onrender.com/${cleanedPath}`;
-  setFileUrl(fileUrl);
-  // Set placeholders if editing
-  if (isEditMode && data.doc.signatures) {
-    const loadedPlaceholders = data.doc.signatures.map(sig => {
-      return {
-        ...sig,
-        x: sig.x,
-        y: sig.y,
-        page: sig.page,
-        locked: true
-      };
-    });
-     setPlaceholders(loadedPlaceholders);
-            setIsConfirmed(data.doc.signed);
-            if (data.doc.signedFilePath) {
-             setSignedPdfUrl(`https://docsign-backend.onrender.com/${data.doc.signedFilePath.replace(/\\/g, "/")}`);
-
-            }
-          }
-          
-          setError("");
-        } else {
-          throw new Error("No file path in response");
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status} - ${res.statusText}`);
         }
+
+        const data = await res.json();
+        console.log('Document data:', data);
+        
+        if (!data.doc) {
+          throw new Error("Document not found in response");
+        }
+
+        if (!data.doc.filePath) {
+          throw new Error("File path not found in document");
+        }
+
+        // Construct the file URL
+        const fileUrl = constructFileUrl(data.doc.filePath);
+        console.log('Setting file URL:', fileUrl);
+        setFileUrl(fileUrl);
+
+        // Set placeholders if editing
+        if (isEditMode && data.doc.signatures) {
+          const loadedPlaceholders = data.doc.signatures.map(sig => ({
+            ...sig,
+            x: sig.x,
+            y: sig.y,
+            page: sig.page,
+            locked: true
+          }));
+          setPlaceholders(loadedPlaceholders);
+        }
+        
+        setIsConfirmed(data.doc.signed || false);
+        
+        if (data.doc.signedFilePath) {
+          const signedUrl = constructFileUrl(data.doc.signedFilePath);
+          setSignedPdfUrl(signedUrl);
+        }
+        
       } catch (err) {
         console.error("Error fetching document:", err);
-        setError(err.message || "Failed to load document");
+        setError(`Failed to load document: ${err.message}`);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchDocument();
-  }, [id, isEditMode, viewport.width, viewport.height]);
+    if (id) {
+      fetchDocument();
+    }
+  }, [id, isEditMode]);
 
   // Drawing functions
   const startDrawing = (e) => {
@@ -144,15 +179,15 @@ if (data.doc?.filePath) {
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
     if (!allowedTypes.includes(file.type)) {
       alert('Please select a valid image file (JPG, JPEG, or PNG)');
-      e.target.value = ''; // Clear the input
+      e.target.value = '';
       return;
     }
     
-    // Validate file size (optional - limit to 5MB)
+    // Validate file size (limit to 5MB)
     const maxSize = 5 * 1024 * 1024; // 5MB in bytes
     if (file.size > maxSize) {
       alert('File size must be less than 5MB');
-      e.target.value = ''; // Clear the input
+      e.target.value = '';
       return;
     }
     
@@ -167,7 +202,7 @@ if (data.doc?.filePath) {
     reader.onerror = (error) => {
       console.error('Error reading file:', error);
       alert('Error reading the image file. Please try again.');
-      e.target.value = ''; // Clear the input
+      e.target.value = '';
     };
     
     reader.readAsDataURL(file);
@@ -207,7 +242,6 @@ if (data.doc?.filePath) {
     if (!isPlacing || !containerRef.current) return;
 
     const rect = containerRef.current.getBoundingClientRect();
-    // Adjusted x position by subtracting 20px to move left
     const x = ((e.clientX - rect.left) / viewport.scale) - 20; 
     const y = (e.clientY - rect.top) / viewport.scale;
 
@@ -215,7 +249,7 @@ if (data.doc?.filePath) {
       ...prev,
       {
         id: Date.now() + Math.random(),
-        x: Math.max(0, x), // Ensure it doesn't go off the left edge
+        x: Math.max(0, x),
         y,
         fixed: false,
         page: pageNumber,
@@ -313,7 +347,13 @@ if (data.doc?.filePath) {
   const handleConfirm = async () => {
     try {
       setIsLoading(true);
+      setError("");
       const token = localStorage.getItem("token");
+      
+      if (!token) {
+        setError("Authentication token not found");
+        return;
+      }
       
       // Convert viewport coordinates to PDF coordinates with proper scaling
       const normalizedPlaceholders = placeholders.map(placeholder => {
@@ -323,7 +363,7 @@ if (data.doc?.filePath) {
         return {
           ...placeholder,
           x: placeholder.x * scaleX,
-          y: pdfDimensions.height - (placeholder.y * scaleY), // Proper Y-axis conversion
+          y: pdfDimensions.height - (placeholder.y * scaleY),
           pageWidth: pdfDimensions.width,
           pageHeight: pdfDimensions.height
         };
@@ -349,21 +389,22 @@ if (data.doc?.filePath) {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to complete document");
+      if (!res.ok) {
+        throw new Error(data.message || `HTTP error! status: ${res.status}`);
+      }
 
       if (data.doc?.signedFilePath) {
-  const signedUrl = `https://docsign-backend.onrender.com/${data.doc.signedFilePath.replace(/\\/g, "/")}`;
-  setSignedPdfUrl(signedUrl);
-  setShowSignedPdf(true);
-}
-
+        const signedUrl = constructFileUrl(data.doc.signedFilePath);
+        setSignedPdfUrl(signedUrl);
+        setShowSignedPdf(true);
+      }
 
       setShowSuccess(true);
       setIsConfirmed(true);
       
     } catch (err) {
       console.error("Error completing document:", err);
-      setError(err.message || "Failed to complete document. Please try again.");
+      setError(`Failed to complete document: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -384,16 +425,18 @@ if (data.doc?.filePath) {
     setNumPages(numPages);
     setPageNumber(1);
     setError("");
+    console.log('PDF loaded successfully with', numPages, 'pages');
   };
 
   const onDocumentLoadError = (error) => {
     console.error("PDF load error:", error);
-    setError("Failed to load PDF file. Please try again.");
+    setError(`Failed to load PDF file: ${error.message || 'Unknown error'}. Please check if the file exists and is accessible.`);
   };
 
   const onPageLoadSuccess = (page) => {
     const { width, height } = page.getViewport({ scale: 1 });
     setPdfDimensions({ width, height });
+    console.log('Page loaded successfully. Dimensions:', { width, height });
   };
 
   const onRenderSuccess = () => {
@@ -410,6 +453,18 @@ if (data.doc?.filePath) {
       }
     }
   };
+
+  // Show loading state
+  if (isLoading && !fileUrl) {
+    return (
+      <div className="flex min-h-screen bg-gray-100 items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading document...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-gray-100">
@@ -491,14 +546,15 @@ if (data.doc?.filePath) {
         </h1>
 
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
-          </div>
-        )}
-
-        {!fileUrl && !error && (
-          <div className="flex items-center justify-center h-64">
-            <p>Loading document...</p>
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 max-w-2xl">
+            <p className="font-semibold">Error:</p>
+            <p>{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-2 px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+            >
+              Retry
+            </button>
           </div>
         )}
 
@@ -509,9 +565,16 @@ if (data.doc?.filePath) {
                 <Document
                   file={signedPdfUrl}
                   onLoadSuccess={onDocumentLoadSuccess}
+                  onLoadError={onDocumentLoadError}
                   loading={
                     <div className="flex items-center justify-center h-64">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3"></div>
                       <p>Loading signed PDF...</p>
+                    </div>
+                  }
+                  error={
+                    <div className="flex items-center justify-center h-64 text-red-600">
+                      <p>Error loading signed PDF</p>
                     </div>
                   }
                 >
@@ -533,7 +596,13 @@ if (data.doc?.filePath) {
                   onLoadError={onDocumentLoadError}
                   loading={
                     <div className="flex items-center justify-center h-64">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3"></div>
                       <p>Loading PDF...</p>
+                    </div>
+                  }
+                  error={
+                    <div className="flex items-center justify-center h-64 text-red-600">
+                      <p>Error loading PDF</p>
                     </div>
                   }
                 >
@@ -558,7 +627,7 @@ if (data.doc?.filePath) {
                       style={{
                         position: "absolute",
                         top: `${ph.y}px`,
-                        left: `${Math.max(0, ph.x)}px`, // Ensure it doesn't go off the left edge
+                        left: `${Math.max(0, ph.x)}px`,
                         zIndex: 10,
                         cursor: isDragging && dragRef.current?.id === ph.id ? 'grabbing' : 'grab'
                       }}
@@ -724,43 +793,23 @@ if (data.doc?.filePath) {
               <div className="mb-4">
                 <input
                   type="file"
-                  accept="image/jpeg,image/jpg,image/png,.jpg,.jpeg,.png"
+                  accept="image/*"
                   onChange={handleImageUpload}
                   className="w-full p-2 border rounded"
                 />
-                <p className="text-sm text-gray-500 mt-1">
-                  Supported formats: JPG, JPEG, PNG (max 5MB)
-                </p>
                 {signatureImage && (
                   <div className="mt-2">
-                    <img
-                      src={signatureImage}
-                      alt="Uploaded signature"
-                      className="max-h-32 mx-auto border rounded"
-                      onError={(e) => {
-                        console.error('Error displaying image:', e);
-                        e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjQwIiB2aWV3Qm94PSIwIDAgMTAwIDQwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjRkZGIi8+Cjx0ZXh0IHg9IjUwIiB5PSIyMCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEwIiBmaWxsPSIjMDAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5JbWFnZSBFcnJvcjwvdGV4dD4KPC9zdmc+';
-                        e.target.alt = 'Error loading image';
-                      }}
+                    <img 
+                      src={signatureImage} 
+                      alt="Signature preview" 
+                      className="max-h-20 max-w-full object-contain border rounded"
                     />
-                    <button
-                      onClick={() => {
-                        setSignatureImage(null);
-                        setSignatureData(null);
-                        // Clear the file input
-                        const fileInput = document.querySelector('input[type="file"]');
-                        if (fileInput) fileInput.value = '';
-                      }}
-                      className="mt-2 bg-red-500 text-white px-3 py-1 rounded text-sm"
-                    >
-                      Remove Image
-                    </button>
                   </div>
                 )}
               </div>
             )}
 
-            <div className="flex justify-end space-x-2">
+            <div className="flex justify-end gap-2">
               <button
                 onClick={() => {
                   setShowSignModal(false);

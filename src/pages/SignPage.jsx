@@ -354,7 +354,7 @@ if (data.doc?.filePath) {
       if (!res.ok) throw new Error(data.message || "Failed to complete document");
 
       if (data.doc?.signedFilePath) {
-        const signedUrl = `${import.meta.env.VITE_API_BASE_URL}/${data.doc.signedFilePath.replace(/\\/g, "/")}`;
+        const signedUrl = `https://docsign-backend.onrender.com/api/${data.doc.signedFilePath.replace(/\\/g, "/")}`;
         setSignedPdfUrl(signedUrl);
         setShowSignedPdf(true);
       }

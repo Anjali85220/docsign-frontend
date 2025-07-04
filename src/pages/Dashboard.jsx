@@ -38,7 +38,7 @@ function Dashboard() {
       setIsLoading(true);
       const token = localStorage.getItem("token");
       
-      const res = await fetch("http://localhost:5000/api/docs", {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/docs`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -70,7 +70,7 @@ function Dashboard() {
       setIsUploading(true);
       const token = localStorage.getItem("token");
 
-      const res = await fetch("http://localhost:5000/api/docs/upload", {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/docs/upload`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -97,7 +97,7 @@ function Dashboard() {
 
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:5000/api/docs/${docId}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/docs/${docId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -120,7 +120,7 @@ function Dashboard() {
         ? doc.signedFilePath 
         : doc.filePath;
       
-      const response = await fetch(`http://localhost:5000/${filePath}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/${filePath}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -177,9 +177,9 @@ function Dashboard() {
 
   const getDocumentUrl = (doc) => {
     if (doc.status === 'completed' && doc.signedFilePath) {
-      return `http://localhost:5000/${doc.signedFilePath.replace(/\\/g, "/")}`;
+      return `${import.meta.env.VITE_API_BASE_URL}/${doc.signedFilePath.replace(/\\/g, "/")}`;
     }
-    return `http://localhost:5000/${doc.filePath.replace(/\\/g, "/")}`;
+    return `${import.meta.env.VITE_API_BASE_URL}/${doc.filePath.replace(/\\/g, "/")}`;
   };
 
   const onDocumentLoadSuccess = ({ numPages }, docId) => {

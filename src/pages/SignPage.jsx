@@ -60,9 +60,11 @@ if (data.doc?.filePath) {
   let cleanedPath = data.doc.filePath.replace(/\\/g, "/");
 
   // If it does NOT already start with "uploads/", prepend it
-  if (!cleanedPath.startsWith("uploads/")) {
-    cleanedPath = "uploads/" + cleanedPath;
-  }
+  // ✅ Ensure it has a single leading 'uploads/' (but don’t double it!)
+if (!cleanedPath.startsWith("uploads/")) {
+  cleanedPath = `uploads/${cleanedPath}`;
+}
+
 
   const fileUrl = `https://docsign-backend.onrender.com/${cleanedPath}`;
   setFileUrl(fileUrl);

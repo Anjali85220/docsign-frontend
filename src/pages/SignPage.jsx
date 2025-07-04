@@ -81,7 +81,8 @@ if (data.doc?.filePath) {
      setPlaceholders(loadedPlaceholders);
             setIsConfirmed(data.doc.signed);
             if (data.doc.signedFilePath) {
-              setSignedPdfUrl(`https://docsign-backend.onrender.com/api/${data.doc.signedFilePath.replace(/\\/g, "/")}`);
+             setSignedPdfUrl(`https://docsign-backend.onrender.com/${data.doc.signedFilePath.replace(/\\/g, "/")}`);
+
             }
           }
           
@@ -354,10 +355,11 @@ if (data.doc?.filePath) {
       if (!res.ok) throw new Error(data.message || "Failed to complete document");
 
       if (data.doc?.signedFilePath) {
-        const signedUrl = `https://docsign-backend.onrender.com/api/${data.doc.signedFilePath.replace(/\\/g, "/")}`;
-        setSignedPdfUrl(signedUrl);
-        setShowSignedPdf(true);
-      }
+  const signedUrl = `https://docsign-backend.onrender.com/${data.doc.signedFilePath.replace(/\\/g, "/")}`;
+  setSignedPdfUrl(signedUrl);
+  setShowSignedPdf(true);
+}
+
 
       setShowSuccess(true);
       setIsConfirmed(true);

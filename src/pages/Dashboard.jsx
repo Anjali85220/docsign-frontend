@@ -120,7 +120,7 @@ function Dashboard() {
         ? doc.signedFilePath 
         : doc.filePath;
       const filePathClean = filePath.replace(/^\/+/, "");
-      const response = await fetch(`https://docsign-backend.onrender.com/api/${filePathClean}`, {
+      const response = await fetch(`https://docsign-backend.onrender.com/${filePathClean}`, {
 
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -178,9 +178,9 @@ function Dashboard() {
 
   const getDocumentUrl = (doc) => {
     if (doc.status === 'completed' && doc.signedFilePath) {
-      return `https://docsign-backend.onrender.com/api/${doc.signedFilePath.replace(/\\/g, "/")}`;
+      return `https://docsign-backend.onrender.com/${doc.signedFilePath.replace(/\\/g, "/")}`;
     }
-    return `https://docsign-backend.onrender.com/api/${doc.filePath.replace(/\\/g, "/")}`;
+    return `https://docsign-backend.onrender.com/${doc.filePath.replace(/\\/g, "/")}`;
   };
 
   const onDocumentLoadSuccess = ({ numPages }, docId) => {
@@ -373,10 +373,13 @@ function Dashboard() {
                             Page {(previewPages[doc._id]?.currentPage || 1)} of {previewPages[doc._id]?.numPages || '--'}
                           </span>
                           <button 
-                            onClick={() => changePreviewPage(doc._id, 1)}
-                            disabled={(previewPages[doc._id]?.currentPage || 1) >= (previewPages[doc._id]?.numPages || 1)}
-                            className="px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded text-sm disabled:opacity-50">
-                          </button>
+  onClick={() => changePreviewPage(doc._id, 1)}
+  disabled={(previewPages[doc._id]?.currentPage || 1) >= (previewPages[doc._id]?.numPages || 1)}
+  className="px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded text-sm disabled:opacity-50"
+>
+  Next
+</button>
+
                         </div>
                       </div>
                       

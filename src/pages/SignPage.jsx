@@ -345,71 +345,99 @@ function SignPage() {
   };
 
   const handleConfirm = async () => {
-    try {
-      setIsLoading(true);
-      setError("");
-      const token = localStorage.getItem("token");
-      
-      if (!token) {
-        setError("Authentication token not found");
-        return;
-      }
-      
-      // Convert viewport coordinates to PDF coordinates with proper scaling
-      const normalizedPlaceholders = placeholders.map(placeholder => {
-        const scaleX = pdfDimensions.width / viewport.width;
-        const scaleY = pdfDimensions.height / viewport.height;
-        
-        return {
-          ...placeholder,
-          x: placeholder.x * scaleX,
-          y: pdfDimensions.height - (placeholder.y * scaleY),
-          pageWidth: pdfDimensions.width,
-          pageHeight: pdfDimensions.height
-        };
-      });
-
-      const allSigned = normalizedPlaceholders.every(p => p.signed);
-      if (!allSigned) {
-        alert("Please sign all placeholders before confirming");
-        return;
-      }
-
-      const res = await fetch(`https://docsign-backend.onrender.com/api/docs/${id}/complete`, {
-        method: "PUT",
-        headers: { 
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ 
-          signatures: normalizedPlaceholders,
-          pdfWidth: pdfDimensions.width,
-          pdfHeight: pdfDimensions.height
-        })
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || `HTTP error! status: ${res.status}`);
-      }
-
-      if (data.doc?.signedFilePath) {
-        const signedUrl = constructFileUrl(data.doc.signedFilePath);
-        setSignedPdfUrl(signedUrl);
-        setShowSignedPdf(true);
-      }
-
-      setShowSuccess(true);
-      setIsConfirmed(true);
-      
-    } catch (err) {
-      console.error("Error completing document:", err);
-      setError(`Failed to complete document: ${err.message}`);
-    } finally {
-      setIsLoading(false);
+  try {
+    setIsLoading(true);
+    setError("");
+    
+    // Add token validation with proper error handling
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setError("Authentication token not found");
+      return;
     }
-  };
 
+    // Convert viewport coordinates to PDF coordinates with proper scaling
+    const normalizedPlaceholders = placeholders.map(placeholder => {
+      const scaleX = pdfDimensions.width / viewport.width;
+      const scaleY = pdfDimensions.height / viewport.height;
+      return {
+        ...placeholder,
+        x: placeholder.x * scaleX,
+        y: pdfDimensions.height - (placeholder.y * scaleY),
+        pageWidth: pdfDimensions.width,
+        pageHeight: pdfDimensions.height
+      };
+    });
+
+    // Validate all signatures are completed
+    const allSigned = normalizedPlaceholders.every(p => p.signed);
+    if (!allSigned) {
+      alert("Please sign all placeholders before confirming");
+      return;
+    }
+
+    // Make API request with timeout and proper headers
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 10000); // 10 second timeout
+
+    const res = await fetch(`https://docsign-backend.onrender.com/api/docs/${id}/complete`, {
+      method: "PUT",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        signatures: normalizedPlaceholders,
+        pdfWidth: pdfDimensions.width,
+        pdfHeight: pdfDimensions.height
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    // Check response status and handle errors
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({
+        message: "Unknown error occurred",
+        status: res.status
+      }));
+      
+      if (res.status === 401) {
+        setError("Session expired. Please log in again.");
+      } else if (res.status === 500) {
+        setError("Server error occurred. Please try again later.");
+      } else {
+        setError(errorData.message || `HTTP error! status: ${res.status}`);
+      }
+      throw new Error(errorData.message || `HTTP error! status: ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    // Handle successful response
+    if (data.doc?.signedFilePath) {
+      const signedUrl = constructFileUrl(data.doc.signedFilePath);
+      setSignedPdfUrl(signedUrl);
+      setShowSignedPdf(true);
+    }
+
+    setShowSuccess(true);
+    setIsConfirmed(true);
+
+  } catch (err) {
+    console.error("Error completing document:", err);
+    if (err.name === 'AbortError') {
+      setError("Request timed out. Please try again.");
+    } else {
+      setError(`Failed to complete document: ${err.message || 'An unexpected error occurred'}`);
+    }
+  } finally {
+    setIsLoading(false);
+  }
+};
   const handleExit = () => {
     if (placeholders.length > 0 && !isConfirmed) {
       if (window.confirm("You have unsigned placeholders. Are you sure you want to exit?")) {

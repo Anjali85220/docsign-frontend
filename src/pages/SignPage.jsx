@@ -48,7 +48,7 @@ function SignPage() {
       try {
         setIsLoading(true);
         const token = localStorage.getItem("token");
-        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/docs/${id}`, {
+        const res = await fetch(`https://docsign-backend.onrender.com/api/docs/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         
@@ -56,7 +56,7 @@ function SignPage() {
 
         const data = await res.json();
         if (data.doc?.filePath) {
-          const url = `${import.meta.env.VITE_API_BASE_URL}/${data.doc.filePath.replace(/\\/g, "/")}`;
+          const url = `https://docsign-backend.onrender.com/api/${data.doc.filePath.replace(/\\/g, "/")}`;
           setFileUrl(url);
           
           if (isEditMode && data.doc.signatures) {
@@ -82,7 +82,7 @@ function SignPage() {
             setPlaceholders(loadedPlaceholders);
             setIsConfirmed(data.doc.signed);
             if (data.doc.signedFilePath) {
-              setSignedPdfUrl(`${import.meta.env.VITE_API_BASE_URL}/${data.doc.signedFilePath.replace(/\\/g, "/")}`);
+              setSignedPdfUrl(`https://docsign-backend.onrender.com/api/${data.doc.signedFilePath.replace(/\\/g, "/")}`);
             }
           }
           
@@ -338,7 +338,7 @@ function SignPage() {
         return;
       }
 
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/docs/${id}/complete`, {
+      const res = await fetch(`https://docsign-backend.onrender.com/api/docs/${id}/complete`, {
         method: "PUT",
         headers: { 
           "Authorization": `Bearer ${token}`,

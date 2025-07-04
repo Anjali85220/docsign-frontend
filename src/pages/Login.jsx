@@ -16,7 +16,7 @@ function Login() {
     setLoading(true);
 
     try {
-      const res = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/auth/login`, form);
+      const res = await axios.post(`https://docsign-backend.onrender.com/api/auth/login`, form);
 
       // Check for token in response
       if (res.data && res.data.token) {

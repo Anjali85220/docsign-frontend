@@ -13,7 +13,7 @@ function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${import.meta.env.VITE_API_BASE_URL}/auth/register`, form);
+      await axios.post(`https://docsign-backend.onrender.com/api/auth/register`, form);
       alert("Registered successfully!");
       navigate("/login");
     } catch (err) {

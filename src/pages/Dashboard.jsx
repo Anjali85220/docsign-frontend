@@ -38,7 +38,7 @@ function Dashboard() {
       setIsLoading(true);
       const token = localStorage.getItem("token");
       
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/docs`, {
+      const res = await fetch(`https://docsign-backend.onrender.com/api/docs`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -70,7 +70,7 @@ function Dashboard() {
       setIsUploading(true);
       const token = localStorage.getItem("token");
 
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/docs/upload`, {
+      const res = await fetch(`https://docsign-backend.onrender.com/api/docs/upload`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -97,7 +97,7 @@ function Dashboard() {
 
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/docs/${docId}`, {
+      const res = await fetch(`https://docsign-backend.onrender.com/api/docs/${docId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -119,8 +119,9 @@ function Dashboard() {
       const filePath = doc.status === 'completed' && doc.signedFilePath 
         ? doc.signedFilePath 
         : doc.filePath;
-      
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/${filePath}`, {
+      const filePathClean = filePath.replace(/^\/+/, "");
+      const response = await fetch(`https://docsign-backend.onrender.com/api/${filePathClean}`, {
+
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -177,9 +178,9 @@ function Dashboard() {
 
   const getDocumentUrl = (doc) => {
     if (doc.status === 'completed' && doc.signedFilePath) {
-      return `${import.meta.env.VITE_API_BASE_URL}/${doc.signedFilePath.replace(/\\/g, "/")}`;
+      return `https://docsign-backend.onrender.com/api/${doc.signedFilePath.replace(/\\/g, "/")}`;
     }
-    return `${import.meta.env.VITE_API_BASE_URL}/${doc.filePath.replace(/\\/g, "/")}`;
+    return `https://docsign-backend.onrender.com/api/${doc.filePath.replace(/\\/g, "/")}`;
   };
 
   const onDocumentLoadSuccess = ({ numPages }, docId) => {

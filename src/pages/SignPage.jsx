@@ -56,7 +56,9 @@ function SignPage() {
 
         const data = await res.json();
         if (data.doc?.filePath) {
-          const url = `https://docsign-backend.onrender.com/api/${data.doc.filePath.replace(/\\/g, "/")}`;
+          const relativePath = data.doc.filePath.replace(/\\/g, "/").replace(/^uploads\//, "");
+          const url = `https://docsign-backend.onrender.com/uploads/${relativePath}`;
+
           setFileUrl(url);
           
           if (isEditMode && data.doc.signatures) {

@@ -17,7 +17,9 @@ function Register() {
       alert("Registered successfully!");
       navigate("/login");
     } catch (err) {
-      alert(err.response.data.message || "Registration failed.");
+      console.error("Register error:", err);
+      const message = err?.response?.data?.message || "Registration failed.";
+      alert(message);
     }
   };
 
@@ -33,22 +35,28 @@ function Register() {
         <h2 className="text-2xl font-semibold text-center">Sign Up</h2>
         <input
           name="name"
+          value={form.name}
           placeholder="Name"
           onChange={handleChange}
           className="w-full p-2 rounded bg-white/80 border border-gray-300 text-black placeholder-black"
+          required
         />
         <input
           name="email"
+          value={form.email}
           placeholder="Email"
           onChange={handleChange}
           className="w-full p-2 rounded bg-white/80 border border-gray-300 text-black placeholder-black"
+          required
         />
         <input
           type="password"
           name="password"
+          value={form.password}
           placeholder="Password"
           onChange={handleChange}
           className="w-full p-2 rounded bg-white/80 border border-gray-300 text-black placeholder-black"
+          required
         />
         <button
           type="submit"

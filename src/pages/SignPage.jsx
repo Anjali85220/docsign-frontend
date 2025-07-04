@@ -58,17 +58,12 @@ function SignPage() {
 const data = await res.json();
 if (data.doc?.filePath) {
   let cleanedPath = data.doc.filePath.replace(/\\/g, "/");
-
-  // If it does NOT already start with "uploads/", prepend it
-  // ✅ Ensure it has a single leading 'uploads/' (but don’t double it!)
-if (!cleanedPath.startsWith("uploads/")) {
-  cleanedPath = `uploads/${cleanedPath}`;
-}
-
-
+  if (!cleanedPath.startsWith("uploads/")) {
+    cleanedPath = `uploads/${cleanedPath}`;
+  }
+  console.log("✅ Cleaned path:", cleanedPath);
   const fileUrl = `https://docsign-backend.onrender.com/${cleanedPath}`;
   setFileUrl(fileUrl);
-
   // Set placeholders if editing
   if (isEditMode && data.doc.signatures) {
     const loadedPlaceholders = data.doc.signatures.map(sig => {

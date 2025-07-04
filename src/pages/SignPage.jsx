@@ -6,11 +6,8 @@ import 'react-pdf/dist/Page/TextLayer.css';
 import { FaCheckCircle, FaDownload, FaEdit, FaTimes, FaSave, FaSignOutAlt } from 'react-icons/fa';
 
 // Configure PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
-).toString();
-
+pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.js";
+  
 function SignPage() {
   const { id } = useParams();
   const navigate = useNavigate();

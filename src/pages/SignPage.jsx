@@ -82,8 +82,7 @@ function SignPage() {
         });
         
         if (!res.ok) {
-          const errorText = await res.text();
-          throw new Error(`HTTP error! status: ${res.status} - ${errorText}`);
+          throw new Error(`HTTP error! status: ${res.status} - ${res.statusText}`);
         }
 
         const data = await res.json();
@@ -106,13 +105,10 @@ function SignPage() {
         if (isEditMode && data.doc.signatures) {
           const loadedPlaceholders = data.doc.signatures.map(sig => ({
             ...sig,
-            x: sig.x || 0,
-            y: sig.y || 0,
-            page: sig.page || 1,
-            locked: true,
-            id: sig.id || Date.now() + Math.random(),
-            signed: sig.signed || false,
-            showBox: !sig.signed
+            x: sig.x,
+            y: sig.y,
+            page: sig.page,
+            locked: true
           }));
           setPlaceholders(loadedPlaceholders);
         }
@@ -218,10 +214,7 @@ function SignPage() {
   };
 
   const applySignature = () => {
-    if (!signatureData && !signatureText) {
-      alert("Please provide a signature before applying");
-      return;
-    }
+    if (!signatureData && !signatureText) return;
 
     setPlaceholders(prev =>
       prev.map(p => 
@@ -252,23 +245,24 @@ function SignPage() {
     const x = ((e.clientX - rect.left) / viewport.scale) - 20; 
     const y = (e.clientY - rect.top) / viewport.scale;
 
-    const newPlaceholder = {
-      id: Date.now() + Math.random(),
-      x: Math.max(0, x),
-      y: Math.max(0, y),
-      fixed: false,
-      page: pageNumber,
-      signed: false,
-      signature: null,
-      signatureType: null,
-      showBox: true,
-      containerWidth: rect.width,
-      containerHeight: rect.height,
-      originalWidth: pdfDimensions.width,
-      originalHeight: pdfDimensions.height
-    };
-
-    setPlaceholders(prev => [...prev, newPlaceholder]);
+    setPlaceholders(prev => [
+      ...prev,
+      {
+        id: Date.now() + Math.random(),
+        x: Math.max(0, x),
+        y,
+        fixed: false,
+        page: pageNumber,
+        signed: false,
+        signature: null,
+        signatureType: null,
+        showBox: true,
+        containerWidth: rect.width,
+        containerHeight: rect.height,
+        originalWidth: pdfDimensions.width,
+        originalHeight: pdfDimensions.height
+      }
+    ]);
     setIsPlacing(false);
   };
 
@@ -301,7 +295,7 @@ function SignPage() {
     setPlaceholders(prev =>
       prev.map(p =>
         p.id === dragRef.current.id
-          ? { ...p, x: Math.max(0, dragRef.current.originalX + dx), y: Math.max(0, dragRef.current.originalY + dy) }
+          ? { ...p, x: dragRef.current.originalX + dx, y: dragRef.current.originalY + dy }
           : p
       )
     );
@@ -310,13 +304,12 @@ function SignPage() {
   const handleDragStart = (e, id) => {
     e.preventDefault();
     setIsDragging(true);
-    const placeholder = placeholders.find(p => p.id === id);
     dragRef.current = {
       id,
       startX: e.clientX,
       startY: e.clientY,
-      originalX: placeholder.x,
-      originalY: placeholder.y
+      originalX: placeholders.find(p => p.id === id).x,
+      originalY: placeholders.find(p => p.id === id).y
     };
   };
 
@@ -355,55 +348,32 @@ function SignPage() {
     try {
       setIsLoading(true);
       setError("");
-      
       const token = localStorage.getItem("token");
+      
       if (!token) {
         setError("Authentication token not found");
         return;
       }
-
-      // Validate that all placeholders are signed
-      const unsignedPlaceholders = placeholders.filter(p => !p.signed);
-      if (unsignedPlaceholders.length > 0) {
-        setError("Please sign all placeholders before confirming");
-        return;
-      }
-
-      // Validate PDF dimensions
-      if (!pdfDimensions.width || !pdfDimensions.height) {
-        setError("PDF dimensions not available. Please wait for the document to load completely.");
-        return;
-      }
-
+      
       // Convert viewport coordinates to PDF coordinates with proper scaling
       const normalizedPlaceholders = placeholders.map(placeholder => {
-        const scaleX = pdfDimensions.width / (viewport.width || 600);
-        const scaleY = pdfDimensions.height / (viewport.height || 800);
+        const scaleX = pdfDimensions.width / viewport.width;
+        const scaleY = pdfDimensions.height / viewport.height;
         
         return {
-          id: placeholder.id,
-          x: Math.max(0, placeholder.x * scaleX),
-          y: Math.max(0, pdfDimensions.height - (placeholder.y * scaleY)),
-          page: placeholder.page || 1,
-          signed: placeholder.signed,
-          signature: placeholder.signature,
-          signatureType: placeholder.signatureType,
-          width: 160, // Default width
-          height: 48, // Default height
+          ...placeholder,
+          x: placeholder.x * scaleX,
+          y: pdfDimensions.height - (placeholder.y * scaleY),
           pageWidth: pdfDimensions.width,
           pageHeight: pdfDimensions.height
         };
       });
 
-      console.log('Sending normalized placeholders:', normalizedPlaceholders);
-      console.log('PDF dimensions:', pdfDimensions);
-
-      const requestBody = {
-        signatures: normalizedPlaceholders,
-        pdfWidth: pdfDimensions.width,
-        pdfHeight: pdfDimensions.height,
-        pageNumber: pageNumber
-      };
+      const allSigned = normalizedPlaceholders.every(p => p.signed);
+      if (!allSigned) {
+        alert("Please sign all placeholders before confirming");
+        return;
+      }
 
       const res = await fetch(`https://docsign-backend.onrender.com/api/docs/${id}/complete`, {
         method: "PUT",
@@ -411,25 +381,18 @@ function SignPage() {
           "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify({ 
+          signatures: normalizedPlaceholders,
+          pdfWidth: pdfDimensions.width,
+          pdfHeight: pdfDimensions.height
+        })
       });
 
-      const responseText = await res.text();
-      console.log('Server response:', responseText);
-
+      const data = await res.json();
       if (!res.ok) {
-        let errorMessage = `HTTP error! status: ${res.status}`;
-        try {
-          const errorData = JSON.parse(responseText);
-          errorMessage = errorData.message || errorMessage;
-        } catch (e) {
-          errorMessage = responseText || errorMessage;
-        }
-        throw new Error(errorMessage);
+        throw new Error(data.message || `HTTP error! status: ${res.status}`);
       }
 
-      const data = JSON.parse(responseText);
-      
       if (data.doc?.signedFilePath) {
         const signedUrl = constructFileUrl(data.doc.signedFilePath);
         setSignedPdfUrl(signedUrl);
@@ -448,8 +411,7 @@ function SignPage() {
   };
 
   const handleExit = () => {
-    const hasUnsignedPlaceholders = placeholders.some(p => !p.signed);
-    if (hasUnsignedPlaceholders && !isConfirmed) {
+    if (placeholders.length > 0 && !isConfirmed) {
       if (window.confirm("You have unsigned placeholders. Are you sure you want to exit?")) {
         navigate("/dashboard");
       }
@@ -483,12 +445,11 @@ function SignPage() {
       const pageElement = container.querySelector('.react-pdf__Page');
       if (pageElement) {
         const { width, height } = pageElement.getBoundingClientRect();
-        setViewport(prev => ({
-          ...prev,
+        setViewport({
           width,
           height,
           scale: width / 600
-        }));
+        });
       }
     }
   };
@@ -532,14 +493,14 @@ function SignPage() {
           </>
         )}
 
-        {isConfirmed && (
-          <button
-            onClick={handleDownloadSignedPdf}
-            className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 w-full flex items-center justify-center gap-2"
-          >
-            <FaDownload /> Download Signed PDF
-          </button>
-        )}
+        <button
+          onClick={handleDownloadSignedPdf}
+          className={`bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 w-full flex items-center justify-center gap-2 ${
+            isConfirmed ? '' : 'hidden'
+          }`}
+        >
+          <FaDownload /> Download Signed PDF
+        </button>
 
         <div className="flex space-x-2">
           <button
@@ -560,17 +521,6 @@ function SignPage() {
             <FaSignOutAlt /> Exit
           </button>
         </div>
-
-        {/* Debug info */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="text-xs text-gray-500 mt-4">
-            <p>PDF Dimensions: {pdfDimensions.width}x{pdfDimensions.height}</p>
-            <p>Viewport: {viewport.width}x{viewport.height}</p>
-            <p>Scale: {viewport.scale.toFixed(2)}</p>
-            <p>Placeholders: {placeholders.length}</p>
-            <p>Signed: {placeholders.filter(p => p.signed).length}</p>
-          </div>
-        )}
       </div>
 
       {/* Main Content */}
@@ -600,10 +550,7 @@ function SignPage() {
             <p className="font-semibold">Error:</p>
             <p>{error}</p>
             <button
-              onClick={() => {
-                setError("");
-                window.location.reload();
-              }}
+              onClick={() => window.location.reload()}
               className="mt-2 px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
             >
               Retry

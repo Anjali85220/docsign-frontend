@@ -65,4 +65,7 @@ Welcome to the **DocSign** frontend – a secure document signing application. B
 Create a `.env` file in the `frontend/` directory:
 
 ```env
-VITE_API_BASE_URL=http://localhost:5000/api
+Deployed URLs
+Frontend: https://docsign-frontend.vercel.app
+
+Backend: https://docsign-backend.onrender.com

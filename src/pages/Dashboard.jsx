@@ -70,11 +70,15 @@ function Dashboard() {
       setIsUploading(true);
       const token = localStorage.getItem("token");
 
-      const res = await fetch(`https://docsign-backend.onrender.com/api/docs/upload`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
+      const res = await fetch("https://docsign-backend.onrender.com/api/docs/upload", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${token}`, // ✅ only this header
+    // ❌ Do NOT set 'Content-Type' manually for FormData
+  },
+  body: formData, // ✅ Let browser handle boundaries automatically
+});
+
 
       const data = await res.json();
       if (res.ok) {

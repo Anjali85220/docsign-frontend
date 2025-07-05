@@ -352,88 +352,187 @@ function SignPage() {
     // Add token validation with proper error handling
     const token = localStorage.getItem("token");
     if (!token) {
-      setError("Authentication token not found");
+      setError("Authentication token not found. Please log in again.");
+      return;
+    }
+
+    // Validate placeholders exist
+    if (!placeholders || placeholders.length === 0) {
+      setError("No signature placeholders found. Please add signatures before confirming.");
+      return;
+    }
+
+    // Validate all signatures are completed
+    const unsignedPlaceholders = placeholders.filter(p => !p.signed);
+    if (unsignedPlaceholders.length > 0) {
+      setError(`Please sign all placeholders before confirming. ${unsignedPlaceholders.length} signatures remaining.`);
+      return;
+    }
+
+    // Validate PDF dimensions
+    if (!pdfDimensions.width || !pdfDimensions.height) {
+      setError("PDF dimensions not available. Please refresh the page and try again.");
       return;
     }
 
     // Convert viewport coordinates to PDF coordinates with proper scaling
-    const normalizedPlaceholders = placeholders.map(placeholder => {
-      const scaleX = pdfDimensions.width / viewport.width;
-      const scaleY = pdfDimensions.height / viewport.height;
-      return {
-        ...placeholder,
-        x: placeholder.x * scaleX,
-        y: pdfDimensions.height - (placeholder.y * scaleY),
-        pageWidth: pdfDimensions.width,
-        pageHeight: pdfDimensions.height
-      };
+    const normalizedPlaceholders = placeholders.map((placeholder, index) => {
+      try {
+        const scaleX = pdfDimensions.width / viewport.width;
+        const scaleY = pdfDimensions.height / viewport.height;
+        
+        return {
+          ...placeholder,
+          x: Math.max(0, placeholder.x * scaleX),
+          y: Math.max(0, pdfDimensions.height - (placeholder.y * scaleY)),
+          pageWidth: pdfDimensions.width,
+          pageHeight: pdfDimensions.height,
+          index: index // Add index for debugging
+        };
+      } catch (coordError) {
+        console.error(`Error processing placeholder ${index}:`, coordError);
+        throw new Error(`Invalid signature placement at position ${index + 1}`);
+      }
     });
 
-    // Validate all signatures are completed
-    const allSigned = normalizedPlaceholders.every(p => p.signed);
-    if (!allSigned) {
-      alert("Please sign all placeholders before confirming");
-      return;
-    }
+    console.log('Sending signature data:', {
+      placeholderCount: normalizedPlaceholders.length,
+      pdfDimensions,
+      viewport,
+      samplePlaceholder: normalizedPlaceholders[0]
+    });
+
+    // Prepare request payload
+    const requestPayload = {
+      signatures: normalizedPlaceholders,
+      pdfWidth: pdfDimensions.width,
+      pdfHeight: pdfDimensions.height,
+      documentId: id,
+      timestamp: new Date().toISOString()
+    };
 
     // Make API request with timeout and proper headers
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       controller.abort();
-    }, 10000); // 10 second timeout
+    }, 30000); // Increased to 30 seconds for document processing
 
+    console.log('Making API request to complete document...');
+    
     const res = await fetch(`https://docsign-backend.onrender.com/api/docs/${id}/complete`, {
       method: "PUT",
       headers: {
         "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept": "application/json"
       },
-      body: JSON.stringify({
-        signatures: normalizedPlaceholders,
-        pdfWidth: pdfDimensions.width,
-        pdfHeight: pdfDimensions.height
-      }),
+      body: JSON.stringify(requestPayload),
       signal: controller.signal
     });
 
     clearTimeout(timeoutId);
 
-    // Check response status and handle errors
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({
-        message: "Unknown error occurred",
-        status: res.status
-      }));
-      
-      if (res.status === 401) {
-        setError("Session expired. Please log in again.");
-      } else if (res.status === 500) {
-        setError("Server error occurred. Please try again later.");
-      } else {
-        setError(errorData.message || `HTTP error! status: ${res.status}`);
-      }
-      throw new Error(errorData.message || `HTTP error! status: ${res.status}`);
+    console.log('API Response status:', res.status);
+    console.log('API Response headers:', Object.fromEntries(res.headers.entries()));
+
+    // Handle different response types
+    let responseData;
+    const contentType = res.headers.get("content-type");
+    
+    if (contentType && contentType.includes("application/json")) {
+      responseData = await res.json();
+    } else {
+      // Handle non-JSON responses
+      const textResponse = await res.text();
+      console.log('Non-JSON response:', textResponse);
+      responseData = { message: textResponse };
     }
 
-    const data = await res.json();
+    // Check response status and handle errors
+    if (!res.ok) {
+      console.error('API Error Response:', responseData);
+      
+      let errorMessage = "An unexpected error occurred";
+      
+      if (res.status === 400) {
+        errorMessage = responseData.message || "Invalid request. Please check your signatures and try again.";
+      } else if (res.status === 401) {
+        errorMessage = "Your session has expired. Please log in again.";
+        // Optionally redirect to login
+        // navigate('/login');
+      } else if (res.status === 403) {
+        errorMessage = "You don't have permission to complete this document.";
+      } else if (res.status === 404) {
+        errorMessage = "Document not found. It may have been deleted or moved.";
+      } else if (res.status === 413) {
+        errorMessage = "Document or signatures are too large. Please reduce image sizes and try again.";
+      } else if (res.status === 422) {
+        errorMessage = responseData.message || "Invalid signature data. Please check your signatures.";
+      } else if (res.status === 500) {
+        errorMessage = "Server error occurred while processing your document. Please try again in a few minutes.";
+        console.error('Server error details:', responseData);
+      } else if (res.status === 502 || res.status === 503 || res.status === 504) {
+        errorMessage = "Service temporarily unavailable. Please try again later.";
+      }
+      
+      setError(errorMessage);
+      throw new Error(`HTTP ${res.status}: ${errorMessage}`);
+    }
+
+    console.log('Document completion successful:', responseData);
 
     // Handle successful response
-    if (data.doc?.signedFilePath) {
-      const signedUrl = constructFileUrl(data.doc.signedFilePath);
+    if (responseData.success === false) {
+      setError(responseData.message || "Document completion failed");
+      return;
+    }
+
+    // Update state with signed document
+    if (responseData.doc?.signedFilePath) {
+      const signedUrl = constructFileUrl(responseData.doc.signedFilePath);
+      console.log('Setting signed PDF URL:', signedUrl);
+      setSignedPdfUrl(signedUrl);
+      setShowSignedPdf(true);
+    } else if (responseData.signedFilePath) {
+      const signedUrl = constructFileUrl(responseData.signedFilePath);
+      console.log('Setting signed PDF URL (alt):', signedUrl);
       setSignedPdfUrl(signedUrl);
       setShowSignedPdf(true);
     }
 
+    // Update success state
     setShowSuccess(true);
     setIsConfirmed(true);
+    
+    // Lock all placeholders
+    setPlaceholders(prev => prev.map(p => ({ ...p, locked: true })));
+
+    console.log('Document completion process finished successfully');
 
   } catch (err) {
     console.error("Error completing document:", err);
+    
+    let userFriendlyError = "An unexpected error occurred";
+    
     if (err.name === 'AbortError') {
-      setError("Request timed out. Please try again.");
+      userFriendlyError = "Request timed out. The server may be busy. Please try again.";
+    } else if (err.name === 'NetworkError' || err.message.includes('fetch')) {
+      userFriendlyError = "Network error. Please check your internet connection and try again.";
+    } else if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
+      userFriendlyError = "Unable to connect to the server. Please check your internet connection.";
+    } else if (err.message.includes('JSON')) {
+      userFriendlyError = "Invalid response from server. Please try again.";
+    } else if (err.message.includes('HTTP')) {
+      userFriendlyError = err.message;
     } else {
-      setError(`Failed to complete document: ${err.message || 'An unexpected error occurred'}`);
+      userFriendlyError = `Failed to complete document: ${err.message}`;
     }
+    
+    setError(userFriendlyError);
+    
+    // Optional: Add retry mechanism
+    console.log('Consider implementing retry mechanism for user');
+    
   } finally {
     setIsLoading(false);
   }

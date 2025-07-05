@@ -381,26 +381,49 @@ function SignPage() {
         const scaleX = pdfDimensions.width / viewport.width;
         const scaleY = pdfDimensions.height / viewport.height;
         
+        // Validate signature data
+        if (!placeholder.signature) {
+          throw new Error(`Missing signature data for placeholder ${index + 1}`);
+        }
+
+        // Check for extremely large signature images
+        if (placeholder.signatureType === 'image' && placeholder.signature.length > 1000000) {
+          console.warn(`Large signature image detected for placeholder ${index + 1}:`, placeholder.signature.length, 'characters');
+        }
+        
         return {
-          ...placeholder,
-          x: Math.max(0, placeholder.x * scaleX),
-          y: Math.max(0, pdfDimensions.height - (placeholder.y * scaleY)),
+          id: placeholder.id,
+          x: Math.max(0, Math.round(placeholder.x * scaleX)),
+          y: Math.max(0, Math.round(pdfDimensions.height - (placeholder.y * scaleY))),
+          page: placeholder.page || 1,
+          signature: placeholder.signature,
+          signatureType: placeholder.signatureType,
           pageWidth: pdfDimensions.width,
           pageHeight: pdfDimensions.height,
-          index: index // Add index for debugging
+          signed: placeholder.signed,
+          width: placeholder.width || 160,
+          height: placeholder.height || 48
         };
       } catch (coordError) {
         console.error(`Error processing placeholder ${index}:`, coordError);
-        throw new Error(`Invalid signature placement at position ${index + 1}`);
+        throw new Error(`Invalid signature placement at position ${index + 1}: ${coordError.message}`);
       }
     });
 
-    console.log('Sending signature data:', {
-      placeholderCount: normalizedPlaceholders.length,
-      pdfDimensions,
-      viewport,
-      samplePlaceholder: normalizedPlaceholders[0]
-    });
+    // Log detailed request information
+    console.log('=== DOCUMENT COMPLETION REQUEST ===');
+    console.log('Document ID:', id);
+    console.log('Placeholder count:', normalizedPlaceholders.length);
+    console.log('PDF dimensions:', pdfDimensions);
+    console.log('Viewport:', viewport);
+    console.log('Normalized placeholders:', normalizedPlaceholders.map(p => ({
+      id: p.id,
+      x: p.x,
+      y: p.y,
+      page: p.page,
+      signatureType: p.signatureType,
+      signatureLength: p.signature?.length || 0
+    })));
 
     // Prepare request payload
     const requestPayload = {
@@ -411,13 +434,21 @@ function SignPage() {
       timestamp: new Date().toISOString()
     };
 
+    // Log payload size
+    const payloadSize = JSON.stringify(requestPayload).length;
+    console.log('Request payload size:', payloadSize, 'characters');
+    
+    if (payloadSize > 5000000) { // 5MB
+      console.warn('Large payload detected:', payloadSize, 'characters');
+    }
+
     // Make API request with timeout and proper headers
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       controller.abort();
-    }, 30000); // Increased to 30 seconds for document processing
+    }, 30000);
 
-    console.log('Making API request to complete document...');
+    console.log('Making API request to:', `https://docsign-backend.onrender.com/api/docs/${id}/complete`);
     
     const res = await fetch(`https://docsign-backend.onrender.com/api/docs/${id}/complete`, {
       method: "PUT",
@@ -432,34 +463,70 @@ function SignPage() {
 
     clearTimeout(timeoutId);
 
-    console.log('API Response status:', res.status);
-    console.log('API Response headers:', Object.fromEntries(res.headers.entries()));
+    console.log('=== API RESPONSE ===');
+    console.log('Status:', res.status);
+    console.log('Status Text:', res.statusText);
+    console.log('Headers:', Object.fromEntries(res.headers.entries()));
 
     // Handle different response types
     let responseData;
     const contentType = res.headers.get("content-type");
     
-    if (contentType && contentType.includes("application/json")) {
-      responseData = await res.json();
-    } else {
-      // Handle non-JSON responses
-      const textResponse = await res.text();
-      console.log('Non-JSON response:', textResponse);
-      responseData = { message: textResponse };
+    try {
+      if (contentType && contentType.includes("application/json")) {
+        responseData = await res.json();
+      } else {
+        const textResponse = await res.text();
+        console.log('Non-JSON response text:', textResponse);
+        responseData = { message: textResponse, isTextResponse: true };
+      }
+    } catch (parseError) {
+      console.error('Error parsing response:', parseError);
+      responseData = { message: 'Invalid response format', parseError: parseError.message };
+    }
+
+    // Log the complete response data
+    console.log('=== RESPONSE DATA ===');
+    console.log('Response type:', typeof responseData);
+    console.log('Response keys:', Object.keys(responseData || {}));
+    console.log('Complete response:', responseData);
+
+    // Try to log nested objects
+    if (responseData && typeof responseData === 'object') {
+      Object.entries(responseData).forEach(([key, value]) => {
+        console.log(`Response.${key}:`, value);
+        if (typeof value === 'object' && value !== null) {
+          console.log(`Response.${key} (stringified):`, JSON.stringify(value, null, 2));
+        }
+      });
     }
 
     // Check response status and handle errors
     if (!res.ok) {
-      console.error('API Error Response:', responseData);
+      console.error('=== ERROR RESPONSE ANALYSIS ===');
+      console.error('Status:', res.status);
+      console.error('Response Data:', responseData);
       
+      // Try to extract more specific error information
       let errorMessage = "An unexpected error occurred";
+      let errorDetails = "";
+      
+      if (responseData) {
+        if (responseData.message) {
+          errorDetails = responseData.message;
+        } else if (responseData.error) {
+          errorDetails = responseData.error;
+        } else if (responseData.details) {
+          errorDetails = responseData.details;
+        } else if (responseData.stack) {
+          errorDetails = responseData.stack;
+        }
+      }
       
       if (res.status === 400) {
-        errorMessage = responseData.message || "Invalid request. Please check your signatures and try again.";
+        errorMessage = errorDetails || "Invalid request. Please check your signatures and try again.";
       } else if (res.status === 401) {
         errorMessage = "Your session has expired. Please log in again.";
-        // Optionally redirect to login
-        // navigate('/login');
       } else if (res.status === 403) {
         errorMessage = "You don't have permission to complete this document.";
       } else if (res.status === 404) {
@@ -467,18 +534,23 @@ function SignPage() {
       } else if (res.status === 413) {
         errorMessage = "Document or signatures are too large. Please reduce image sizes and try again.";
       } else if (res.status === 422) {
-        errorMessage = responseData.message || "Invalid signature data. Please check your signatures.";
+        errorMessage = errorDetails || "Invalid signature data. Please check your signatures.";
       } else if (res.status === 500) {
-        errorMessage = "Server error occurred while processing your document. Please try again in a few minutes.";
-        console.error('Server error details:', responseData);
+        errorMessage = "Server error occurred while processing your document.";
+        if (errorDetails) {
+          console.error('Server error details:', errorDetails);
+          errorMessage += ` Details: ${errorDetails}`;
+        }
       } else if (res.status === 502 || res.status === 503 || res.status === 504) {
         errorMessage = "Service temporarily unavailable. Please try again later.";
       }
       
+      console.error('Final error message:', errorMessage);
       setError(errorMessage);
       throw new Error(`HTTP ${res.status}: ${errorMessage}`);
     }
 
+    console.log('=== SUCCESS RESPONSE ===');
     console.log('Document completion successful:', responseData);
 
     // Handle successful response
@@ -510,7 +582,11 @@ function SignPage() {
     console.log('Document completion process finished successfully');
 
   } catch (err) {
-    console.error("Error completing document:", err);
+    console.error("=== ERROR CAUGHT ===");
+    console.error("Error name:", err.name);
+    console.error("Error message:", err.message);
+    console.error("Error stack:", err.stack);
+    console.error("Full error object:", err);
     
     let userFriendlyError = "An unexpected error occurred";
     
@@ -529,9 +605,6 @@ function SignPage() {
     }
     
     setError(userFriendlyError);
-    
-    // Optional: Add retry mechanism
-    console.log('Consider implementing retry mechanism for user');
     
   } finally {
     setIsLoading(false);
@@ -580,6 +653,7 @@ function SignPage() {
       }
     }
   };
+
 
   // Show loading state
   if (isLoading && !fileUrl) {
@@ -957,9 +1031,12 @@ function SignPage() {
                 Apply Signature
               </button>
             </div>
+            
           </div>
+          
         </div>
       )}
+      
     </div>
   );
 }
